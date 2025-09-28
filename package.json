@@ -1,0 +1,19 @@
+{
+  "name": "ecommerce-app-project",
+  "version": "1.0.0",
+  "description": "This project is a minimalist full‑stack e‑commerce web application built without any third‑party libraries.  It demonstrates how to implement client–server communication, routing and data persistence using only the standard Node.js modules and browser APIs.  By avoiding heavy frameworks, the application highlights core software engineering concepts that are applicable across many languages and frameworks.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "sqlite3": "^5.1.7"
+  }
+}

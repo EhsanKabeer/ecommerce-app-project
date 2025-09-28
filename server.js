@@ -1,21 +1,46 @@
-/*
- * server.js
- *
- * This is a basic e‑commerce server built with Node.  It doesn’t use
- * any extra libraries.  The server serves the HTML, CSS and JS from
- * the client folder and has a small API to list products and take
- * orders.  It’s meant to show the core ideas without a lot of
- * complexity.
- */
-
-const http = require('http');
-const fs = require('fs');
 const path = require('path');
-const url = require('url');
+const fs = require('fs');
+const express = require('express');
+const session = require('express-session');
+const sqlite3 = require('sqlite3').verbose();
+const crypto = require('crypto');
 
-// Hard‑coded product catalogue.  In a real application this data would
-// reside in a database.  Each product has an id, name, description,
-// price and an image URL (placeholder images are used).
+const app = express();
+const PORT = process.env.PORT || 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'development-secret';
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_PATH = path.join(DATA_DIR, 'app.db');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const db = new sqlite3.Database(DB_PATH);
+
+db.serialize(() => {
+  db.run(
+    `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      hashedPassword TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    )`
+  );
+
+  db.run(
+    `CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER,
+      items TEXT NOT NULL,
+      total REAL NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    )`
+  );
+});
+
 const products = [
   {
     id: 1,
@@ -34,133 +59,327 @@ const products = [
   {
     id: 3,
     name: 'Noise Cancelling Headphones',
-    description: 'Over‑ear headphones with active noise cancellation.',
+    description: 'Over-ear headphones with active noise cancellation.',
     price: 129.99,
     image: 'https://via.placeholder.com/150?text=Headphones'
   },
   {
     id: 4,
-    name: 'USB‑C Hub',
-    description: 'Seven‑port USB‑C hub with 4K HDMI output and PD.',
+    name: 'USB-C Hub',
+    description: 'Seven-port USB-C hub with 4K HDMI output and PD.',
     price: 49.99,
     image: 'https://via.placeholder.com/150?text=USB-C+Hub'
   },
   {
     id: 5,
     name: 'Portable SSD',
-    description: '512 GB NVMe portable SSD with USB 3.2 Gen 2.',
+    description: '512 GB NVMe portable SSD with USB 3.2 Gen 2.',
     price: 99.99,
     image: 'https://via.placeholder.com/150?text=SSD'
   }
 ];
 
-/**
- * Serve a static file from the client directory.
- *
- * @param {http.ServerResponse} res
- * @param {string} filePath
- */
-function serveStatic(res, filePath) {
-  const ext = path.extname(filePath);
-  const mimeTypes = {
-    '.html': 'text/html',
-    '.js': 'application/javascript',
-    '.css': 'text/css',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.svg': 'image/svg+xml'
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.pbkdf2Sync(password, salt, 310000, 32, 'sha256');
+  return salt.toString('hex') + ':' + hash.toString('hex');
+}
+
+function verifyPassword(password, stored) {
+  const [saltHex, hashHex] = stored.split(':');
+  if (!saltHex || !hashHex) return false;
+  const salt = Buffer.from(saltHex, 'hex');
+  const expectedHash = Buffer.from(hashHex, 'hex');
+  const actualHash = crypto.pbkdf2Sync(password, salt, 310000, 32, 'sha256');
+  return crypto.timingSafeEqual(expectedHash, actualHash);
+}
+
+function sanitizeUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
   };
-  fs.readFile(filePath, (err, content) => {
-    if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-    } else {
-      const contentType = mimeTypes[ext] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(content);
-    }
-  });
 }
 
-/**
- * Handle API requests and static file serving.
- *
- * @param {http.IncomingMessage} req
- * @param {http.ServerResponse} res
- */
-function requestHandler(req, res) {
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname;
-
-  if (pathname === '/api/products' && req.method === 'GET') {
-    // Return the product catalogue as JSON
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(products));
-    return;
-  }
-
-  if (pathname === '/api/order' && req.method === 'POST') {
-    // Collect POST data
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk;
-    });
-    req.on('end', () => {
-      let items;
-      try {
-        items = JSON.parse(body);
-        if (!Array.isArray(items) || items.length === 0) {
-          throw new Error('Order must be a non‑empty array');
-        }
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }));
-        return;
-      }
-      // Validate items and calculate total
-      let total = 0;
-      for (const item of items) {
-        const { id, quantity } = item;
-        const product = products.find(p => p.id === id);
-        if (!product) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: `Unknown product id ${id}` }));
-          return;
-        }
-        const qty = Number(quantity);
-        if (!Number.isInteger(qty) || qty <= 0) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: `Invalid quantity for product ${id}` }));
-          return;
-        }
-        total += product.price * qty;
-      }
-      // Simulate persistence (e.g. save to database) and return order summary
-      const orderId = Date.now();
-      console.log('Processed order', orderId, 'for items', items);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, orderId, total }));
-    });
-    return;
-  }
-
-  // Serve static files from the client folder.  Default to index.html.
-  let filePath = path.join(__dirname, 'client', pathname === '/' ? 'index.html' : pathname);
-  fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
-      // File does not exist; return 404
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-      return;
+app.use(express.json());
+app.use(
+  session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7
     }
-    serveStatic(res, filePath);
-  });
+  })
+);
+
+app.use((req, res, next) => {
+  const { userId } = req.session;
+  if (!userId) {
+    req.user = null;
+    return next();
+  }
+  db.get(
+    'SELECT id, username, email, createdAt, updatedAt FROM users WHERE id = ?',
+    [userId],
+    (err, row) => {
+      if (err) {
+        return next(err);
+      }
+      if (!row) {
+        delete req.session.userId;
+        req.user = null;
+        return next();
+      }
+      req.user = row;
+      return next();
+    }
+  );
+});
+
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  return next();
 }
 
-const PORT = process.env.PORT || 3000;
-const server = http.createServer(requestHandler);
-server.listen(PORT, () => {
-  console.log(`E‑Commerce server running at http://localhost:${PORT}`);
+app.get('/api/products', (req, res) => {
+  res.json(products);
+});
+
+app.get('/api/session', (req, res) => {
+  res.json({ user: sanitizeUser(req.user) });
+});
+
+app.post('/api/signup', (req, res, next) => {
+  const { username, email, password } = req.body || {};
+  if (!username || typeof username !== 'string' || username.trim().length === 0) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const emailRegex = /.+@.+\..+/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return res.status(400).json({ error: 'Valid email is required' });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  db.get('SELECT id FROM users WHERE email = ?', [normalizedEmail], (err, existing) => {
+    if (err) return next(err);
+    if (existing) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const now = new Date().toISOString();
+    const hashedPassword = hashPassword(password);
+    db.run(
+      'INSERT INTO users (username, email, hashedPassword, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
+      [username.trim(), normalizedEmail, hashedPassword, now, now],
+      function (insertErr) {
+        if (insertErr) return next(insertErr);
+        const newUserId = this.lastID;
+        req.session.regenerate(regenerateErr => {
+          if (regenerateErr) return next(regenerateErr);
+          req.session.userId = newUserId;
+          db.get(
+            'SELECT id, username, email, createdAt, updatedAt FROM users WHERE id = ?',
+            [newUserId],
+            (selectErr, userRow) => {
+              if (selectErr) return next(selectErr);
+              res.status(201).json({ user: sanitizeUser(userRow) });
+            }
+          );
+        });
+      }
+    );
+  });
+});
+
+app.post('/api/login', (req, res, next) => {
+  const { email, password } = req.body || {};
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!normalizedEmail || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  db.get('SELECT * FROM users WHERE email = ?', [normalizedEmail], (err, userRow) => {
+    if (err) return next(err);
+    if (!userRow || !verifyPassword(password, userRow.hashedPassword)) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    req.session.regenerate(regenerateErr => {
+      if (regenerateErr) return next(regenerateErr);
+      req.session.userId = userRow.id;
+      res.json({ user: sanitizeUser(userRow) });
+    });
+  });
+});
+
+app.post('/api/logout', (req, res, next) => {
+  req.session.destroy(err => {
+    if (err) return next(err);
+    res.clearCookie('connect.sid');
+    res.status(204).end();
+  });
+});
+
+app.get('/api/account', requireAuth, (req, res) => {
+  res.json({ user: sanitizeUser(req.user) });
+});
+
+app.put('/api/account', requireAuth, (req, res, next) => {
+  const { username, email } = req.body || {};
+  const updates = [];
+  const values = [];
+
+  if (typeof username === 'string' && username.trim().length > 0 && username.trim() !== req.user.username) {
+    updates.push('username = ?');
+    values.push(username.trim());
+  }
+
+  if (typeof email === 'string' && email.trim().toLowerCase() !== req.user.email) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /.+@.+\..+/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    updates.push('email = ?');
+    values.push(normalizedEmail);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No changes provided' });
+  }
+
+  const finishUpdate = () => {
+    const now = new Date().toISOString();
+    updates.push('updatedAt = ?');
+    values.push(now, req.user.id);
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+    db.run(sql, values, function (err) {
+      if (err) return next(err);
+      db.get(
+        'SELECT id, username, email, createdAt, updatedAt FROM users WHERE id = ?',
+        [req.user.id],
+        (selectErr, row) => {
+          if (selectErr) return next(selectErr);
+          req.user = row;
+          res.json({ user: sanitizeUser(row) });
+        }
+      );
+    });
+  };
+
+  const emailIndex = updates.findIndex(update => update.startsWith('email ='));
+  if (emailIndex !== -1) {
+    const emailValue = values[emailIndex];
+    db.get('SELECT id FROM users WHERE email = ? AND id <> ?', [emailValue, req.user.id], (err, row) => {
+      if (err) return next(err);
+      if (row) {
+        return res.status(409).json({ error: 'Email already in use' });
+      }
+      finishUpdate();
+    });
+  } else {
+    finishUpdate();
+  }
+});
+
+app.delete('/api/account', requireAuth, (req, res, next) => {
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || password.length === 0) {
+    return res.status(400).json({ error: 'Password confirmation is required' });
+  }
+
+  db.get('SELECT hashedPassword FROM users WHERE id = ?', [req.user.id], (err, row) => {
+    if (err) return next(err);
+    if (!row || !verifyPassword(password, row.hashedPassword)) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    db.serialize(() => {
+      db.run('DELETE FROM orders WHERE userId = ?', [req.user.id]);
+      db.run('DELETE FROM users WHERE id = ?', [req.user.id], deleteErr => {
+        if (deleteErr) return next(deleteErr);
+        req.session.destroy(sessionErr => {
+          if (sessionErr) return next(sessionErr);
+          res.clearCookie('connect.sid');
+          res.status(204).end();
+        });
+      });
+    });
+  });
+});
+
+app.get('/api/orders', requireAuth, (req, res, next) => {
+  db.all(
+    'SELECT id, items, total, createdAt FROM orders WHERE userId = ? ORDER BY datetime(createdAt) DESC',
+    [req.user.id],
+    (err, rows) => {
+      if (err) return next(err);
+      const orders = rows.map(row => ({
+        id: row.id,
+        items: JSON.parse(row.items),
+        total: row.total,
+        createdAt: row.createdAt
+      }));
+      res.json({ orders });
+    }
+  );
+});
+
+app.post('/api/order', requireAuth, (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [];
+  if (items.length === 0) {
+    return res.status(400).json({ success: false, error: 'Order must be a non-empty array' });
+  }
+
+  let total = 0;
+  for (const item of items) {
+    const { id, quantity } = item;
+    const product = products.find(p => p.id === id);
+    if (!product) {
+      return res.status(400).json({ success: false, error: `Unknown product id ${id}` });
+    }
+    const qty = Number(quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      return res.status(400).json({ success: false, error: `Invalid quantity for product ${id}` });
+    }
+    total += product.price * qty;
+  }
+
+  const now = new Date().toISOString();
+  db.run(
+    'INSERT INTO orders (userId, items, total, createdAt) VALUES (?, ?, ?, ?)',
+    [req.user.id, JSON.stringify(items), total, now],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ success: false, error: 'Failed to save order' });
+      }
+      res.json({ success: true, orderId: this.lastID, total });
+    }
+  );
+});
+
+app.use(express.static(path.join(__dirname, 'client')));
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+app.listen(PORT, () => {
+  console.log(`E-Commerce server running at http://localhost:${PORT}`);
 });

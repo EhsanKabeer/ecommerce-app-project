@@ -1,0 +1,142 @@
+/* Basic styling for the mini e‑commerce app */
+
+/*
+  Use a modern sans‑serif font stack for a cleaner look.  'Segoe UI' is widely available on
+  Windows systems; the fallbacks ensure reasonable fonts on other platforms.  We keep
+  margins and padding reset and a light background for subtle contrast.
+*/
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f7f7f7;
+  color: #333;
+}
+
+/*
+  Header uses the primary blue colour with a subtle shadow to distinguish it from the
+  page content.  The box‑shadow improves visual separation without changing the flat
+  design.  Padding and centred text remain unchanged.
+*/
+header {
+  background-color: #0d6efd;
+  color: #fff;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+main {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 1rem;
+}
+
+#products {
+  flex: 2;
+  min-width: 60%;
+  margin-right: 1rem;
+}
+
+#cart {
+  flex: 1;
+  min-width: 30%;
+  background-color: #fff;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  height: fit-content;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.product-card {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.product-card img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.product-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.product-card p {
+  flex-grow: 1;
+  margin-bottom: 0.5rem;
+}
+
+.product-card button {
+  background-color: #198754;
+  color: #fff;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.product-card button:hover {
+  background-color: #157347;
+}
+
+#cart-items {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+}
+
+#cart-items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+#cart-total {
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+
+#checkout-btn {
+  background-color: #0d6efd;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+#checkout-btn:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
+
+#checkout-btn:not(:disabled):hover {
+  background-color: #0b5ed7;
+}
+
+#order-status {
+  margin-top: 0.5rem;
+  color: green;
+  font-weight: bold;
+}

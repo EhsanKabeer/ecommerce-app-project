@@ -1,47 +1,49 @@
 # Mini E‑Commerce Application
 
-This project is a minimalist full‑stack e‑commerce web application built
-without any third‑party libraries.  It demonstrates how to implement
-client–server communication, routing and data persistence using only the
-standard Node.js modules and browser APIs.  By avoiding heavy
-frameworks, the application highlights core software engineering
-concepts that are applicable across many languages and frameworks.
+This project is a minimalist full‑stack e‑commerce web application.  The
+latest iteration layers user accounts, authentication and SQLite backed
+data persistence on top of the original catalogue and order flow.  The
+goal is to keep the technology footprint approachable while showcasing
+how the core pieces of a modern e‑commerce experience fit together.
 
 ## Features
 
 * **Product catalogue API** — a JSON endpoint (`/api/products`) that
-  serves a hard‑coded list of products including names, descriptions,
+  serves a curated list of demo products including names, descriptions,
   prices and image URLs.
-- **Static file serving** — the Node server delivers HTML, CSS and
+* **Static front end** — the Node server delivers HTML, CSS and
   JavaScript assets from the `client` directory.
-- **Shopping cart** — implemented entirely on the front end; users can
-  add products, view quantities and see a running total.
-- **Checkout flow** — sends the cart contents to the server via a
-  JSON POST request (`/api/order`).  The server validates product
-  IDs and quantities, calculates the order total and returns a mock
-  order ID and total amount.  Invalid orders (empty cart, unknown
-  products or negative quantities) result in descriptive error
-  responses.
+* **Shopping cart** — maintained on the front end; users can add
+  products, view quantities and see a running total in real time.
+* **Authenticated checkout** — orders are submitted through
+  `/api/order`.  The server validates each line item and persists the
+  order together with the authenticated user who placed it.
+* **Account management** — REST APIs for signing up, logging in/out,
+  reading/updating profile details and deleting an account (with order
+  history cleanup).  Session state is backed by cookie‑based Express
+  sessions and passwords are hashed with PBKDF2.
+* **Order history UI** — the “My Account” page surfaces saved orders and
+  profile information using authenticated fetch requests.
 
 ## Technology Stack
 
 | Layer       | Technology                             |
 | ----------- | -------------------------------------- |
-| Back end    | Node.js (built‑in `http` module)        |
+| Back end    | Node.js + Express + express-session     |
 | Front end   | Vanilla JavaScript, HTML and CSS        |
-| Data store  | In‑memory objects (no external database) |
+| Data store  | SQLite (via the `sqlite3` Node module)  |
 
 ## Running the Application
 
-1. **Navigate to the project directory**
+1. **Install dependencies**
 
    ```bash
-   cd ecommerce-app
+   npm install
    ```
 
 2. **Start the server**
 
-   Run the Node server.  It listens on port 3000 by default:
+   The Node server listens on port 3000 by default:
 
    ```bash
    node server.js
@@ -56,31 +58,26 @@ concepts that are applicable across many languages and frameworks.
 3. **Open the application in a browser**
 
    Navigate to `http://localhost:3000` in your web browser.  The product
-   catalogue will load automatically.  Add items to your cart and click
-   the **Checkout** button to place a mock order.  The server validates
-   the order and returns an order ID along with the total cost.  Invalid
-   carts trigger error messages.
+   catalogue will load automatically.  Create an account or log in to
+   unlock checkout and the account dashboard.  Orders and profile
+   changes persist to the SQLite database found in `data/app.db`.
 
 ## Extending the Project
 
-This skeleton can be expanded in numerous ways to create a more
-production‑ready system:
+This foundation is intentionally lightweight so it can serve as a
+springboard for experimentation:
 
-1. **Replace the hard‑coded catalogue** with a database such as
-   MongoDB or PostgreSQL and implement CRUD APIs for managing products.
-2. **Implement user authentication** using sessions or JSON Web Tokens.
-3. **Persist orders** to a database and integrate payment processing via
-   a service like Stripe.
-4. **Automated testing** — review the `stress_test.py` script in the
-   repository.  It uses Python’s built‑in `urllib` and `threading`
-   modules to send concurrent valid and invalid orders to the API,
-   demonstrating how to simulate load and ensure the server responds
-   correctly under edge cases.
-4. **Add search and filtering** to the product list and implement
-   pagination for large catalogues.
-5. **Transition to a modern front‑end framework** (React, Angular,
-   Vue, etc.) while preserving the existing API contract to
-   demonstrate understanding of client–server separation.
+1. Replace the static catalogue with product CRUD endpoints backed by
+   the database.
+2. Swap the session‑based authentication flow for JWTs or integrate a
+   third‑party identity provider.
+3. Expand the order data model to include shipping addresses, payment
+   status and fulfilment workflows.
+4. Add automated testing (API + front end).  The included
+   `stress_test.py` script illustrates how to exercise the endpoints with
+   concurrent, authenticated requests.
+5. Transition to a modern front‑end framework (React, Vue, etc.) while
+   preserving the API contract.
 
 ## License
 

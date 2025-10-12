@@ -62,6 +62,61 @@ how the core pieces of a modern e‑commerce experience fit together.
    unlock checkout and the account dashboard.  Orders and profile
    changes persist to the SQLite database found in `data/app.db`.
 
+## Deployment
+
+The app is a single Express server that also serves the static front-end
+files, so deployment only requires running `node server.js` on a host with
+Node.js 18+ available. The steps below walk through a typical deployment to
+an all-in-one Node hosting service such as [Render](https://render.com),
+[Railway](https://railway.app) or a generic virtual machine.
+
+1. **Prepare the repository**
+
+   * Commit all changes so the hosting provider can pull directly from your
+     Git repository.
+   * Ensure the `sqlite3` dependency is listed in `package.json`; the build
+     step installs it automatically.
+
+2. **Configure the service**
+
+   * Create a new “Web Service” (Render/Railway) or VM.
+   * Point it at your Git repository or push the repo to the host.
+   * Set the start command to:
+
+     ```bash
+     node server.js
+     ```
+
+   * (Optional) define environment variables:
+     * `PORT` – override the default `3000` port if your platform requires a
+       different listening port.
+     * `SESSION_SECRET` – customize the session secret used by Express.
+
+3. **Persist the SQLite database**
+
+   The default database path is `data/app.db`. Most hosts mount the
+   application directory on ephemeral storage, so configure a persistent
+   volume if you need data to survive restarts:
+
+   * Render: add a “Disk” mounted to `/data` and set `DATABASE_PATH=/data/app.db`.
+   * Railway: add a volume and update the start command to copy the database
+     there (or set `DATABASE_PATH`).
+
+   Update `server.js` to read the `DATABASE_PATH` environment variable if you
+   plan on using a custom location.
+
+4. **Deploy**
+
+   * Trigger the initial build/deploy from the host UI. The service will run
+     `npm install` followed by your start command.
+   * Once the instance is healthy, open the provided URL. You should see the
+     same UI you get locally, and the APIs will use the deployed SQLite
+     database for persistence.
+
+For bare-metal or VM deployments, install Node.js 18+, run `npm install`,
+start the app with `node server.js`, and configure your process manager of
+choice (e.g. `pm2`, `systemd`) to keep it running.
+
 ## Extending the Project
 
 This foundation is intentionally lightweight so it can serve as a

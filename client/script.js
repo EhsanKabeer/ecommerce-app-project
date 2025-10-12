@@ -153,9 +153,9 @@
       });
       const data = await response.json();
       if (response.ok && data.success) {
-        orderStatus.textContent = `Order placed successfully! Your order ID is ${data.orderId}.`;
         state.cart = [];
         updateCartUI();
+        orderStatus.textContent = `Order placed successfully! Your order ID is ${data.orderId}.`;
         if (window.location.hash === '#account') {
           await loadOrders();
         }

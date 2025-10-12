@@ -8,11 +8,18 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'development-secret';
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'app.db');
+const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
+const envDbPath = process.env.DATABASE_PATH;
+const resolvedDbPath = envDbPath
+  ? path.isAbsolute(envDbPath)
+    ? envDbPath
+    : path.resolve(__dirname, envDbPath)
+  : path.join(DEFAULT_DATA_DIR, 'app.db');
+const DB_PATH = resolvedDbPath;
+const DB_DIRECTORY = path.dirname(DB_PATH);
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DB_DIRECTORY)) {
+  fs.mkdirSync(DB_DIRECTORY, { recursive: true });
 }
 
 const db = new sqlite3.Database(DB_PATH);

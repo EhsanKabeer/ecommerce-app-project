@@ -160,6 +160,15 @@ app.get('/api/products', (req, res) => {
   res.json(products);
 });
 
+app.get('/api/health', (req, res, next) => {
+  db.get('SELECT 1', err => {
+    if (err) {
+      return next(err);
+    }
+    res.json({ status: 'ok' });
+  });
+});
+
 app.get('/api/session', (req, res) => {
   res.json({ user: sanitizeUser(req.user) });
 });
